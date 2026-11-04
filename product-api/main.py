@@ -1,20 +1,22 @@
 """ Cisco M2S2 Demo 01: beginer Product CRUD API (in-memory storage)"""
 import os
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, Field
-from starlette.exceptions import HTTPException as StarletterHTTPException
 
-import  datetime
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
-from pydantic import BaseModel
+
+
+from pydantic import BaseModel, Field 
 
 
 app = FastAPI(
@@ -72,6 +74,8 @@ demo_user = {
     "username": DEMO_USERNAME,
     "password_hash": password_hash.hash(DEMO_PASSWORD),
 }
+
+#URL from where the client would get the access token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 def authenticate(username: str, password: str) -> bool:
@@ -84,6 +88,46 @@ def create_access_token(subject: str) -> str:
     expires = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES)
     payload = {"sub": subject, "exp": expires}
     return jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHM)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error_handler(request: Request, exc: StarletteHTTPException):
+    code = "DEVICE_NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": code, "message": str(exc.detail), "status": exc.status_code}}
+    )
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
+    credentials_error = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or missing authentication credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if username != demo_user["username"]:
+            raise credentials_error
+        return str(username)
+    except InvalidTokenError:
+        raise credentials_error
+
+
+
+@app.post("/auth/token")
+def login(form: OAuth2PasswordRequestForm = Depends()):
+    if not authenticate(form.username, form.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return {
+        "access_token": create_access_token(form.username),
+        "token_type": "bearer",
+    }
 
 
 # Implement the Home Page
@@ -110,7 +154,7 @@ def  get_product(product_id: int):
 
 # Implement new Product creation 
 @app.post("/products", status_code=status.HTTP_201_CREATED,response_model=Product)
-def create_product(request_payload: ProductCreate):
+def create_product(request_payload: ProductCreate, current_user: str = Depends(get_current_user)):
     global next_id
     product = Product(id=next_id, **request_payload.model_dump())
     products[next_id] = product
