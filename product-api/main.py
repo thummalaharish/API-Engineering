@@ -139,14 +139,14 @@ def home():
 # Implement the /products endpoint
 
 @app.get("/products")
-def  list_products():
+def  list_products(current_user: str = Depends(get_current_user)):
     return list(products.values())
 
 # Implement the /products/{product_id}
 
 
 @app.get("/products/{product_id}", response_model = Product)
-def  get_product(product_id: int):
+def  get_product(product_id: int,current_user: str = Depends(get_current_user)):
     product = products.get(product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -164,7 +164,7 @@ def create_product(request_payload: ProductCreate, current_user: str = Depends(g
 # Implement replace an existing product 
 
 @app.put("/products/{product_id}", response_model=Product)
-def replace_product(product_id: int, payload: ProductCreate):
+def replace_product(product_id: int, payload: ProductCreate,current_user: str = Depends(get_current_user)):
     if product_id not in products:
         raise HTTPException(status_code=404, detail="Product not found")
     product = Product(id=product_id, **payload.model_dump())
@@ -174,7 +174,7 @@ def replace_product(product_id: int, payload: ProductCreate):
 # Implement updating existing product
 
 @app.patch("/products/{product_id}", response_model=Product)
-def update_product(product_id: int, payload: ProductUpdate):
+def update_product(product_id: int, payload: ProductUpdate,current_user: str = Depends(get_current_user)):
     if product_id not in products:
             raise HTTPException(status_code=404, detail="Product not found")
     existing_product = products.get(product_id)
@@ -190,7 +190,7 @@ def update_product(product_id: int, payload: ProductUpdate):
 # Deleteing a product
 
 @app.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delet_product(product_id: int):
+def delet_product(product_id: int,current_user: str = Depends(get_current_user)):
     if product_id not in products:
         raise HTTPException(status_code=404, detail="Product not found")
     del products[product_id]
