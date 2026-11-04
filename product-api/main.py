@@ -139,7 +139,7 @@ def home():
 # Implement the /products endpoint
 
 @app.get("/products")
-def  list_products(current_user: str = Depends(get_current_user)):
+def  list_products():
     return list(products.values())
 
 # Implement the /products/{product_id}
